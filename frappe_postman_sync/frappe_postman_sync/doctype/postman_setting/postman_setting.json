@@ -1,0 +1,112 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-10-18 14:52:50.689134",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "postman_api_key",
+  "workspace_id",
+  "collection_id",
+  "base_url",
+  "enable_auto_sync",
+  "column_break_7",
+  "sync_frequency",
+  "last_sync",
+  "status",
+  "section_break_11",
+  "description"
+ ],
+ "fields": [
+  {
+   "fieldname": "postman_api_key",
+   "fieldtype": "Password",
+   "label": "Postman API Key",
+   "reqd": 1
+  },
+  {
+   "fieldname": "workspace_id",
+   "fieldtype": "Data",
+   "label": "Workspace ID",
+   "reqd": 1
+  },
+  {
+   "fieldname": "collection_id",
+   "fieldtype": "Data",
+   "label": "Collection ID",
+   "reqd": 1
+  },
+  {
+   "fieldname": "base_url",
+   "fieldtype": "Data",
+   "label": "Base URL",
+   "default": "http://localhost:8000",
+   "reqd": 1
+  },
+  {
+   "fieldname": "enable_auto_sync",
+   "fieldtype": "Check",
+   "label": "Enable Auto Sync",
+   "default": 1
+  },
+  {
+   "fieldname": "column_break_7",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sync_frequency",
+   "fieldtype": "Select",
+   "label": "Sync Frequency",
+   "options": "Immediate\nHourly\nDaily",
+   "default": "Immediate"
+  },
+  {
+   "fieldname": "last_sync",
+   "fieldtype": "Datetime",
+   "label": "Last Sync",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Active\nInactive\nError",
+   "default": "Active",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_11",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text",
+   "label": "Description"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2025-10-18 14:52:50.689134",
+ "modified_by": "Administrator",
+ "module": "Frappe Postman Sync",
+ "name": "Postman Setting",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

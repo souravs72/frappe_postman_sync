@@ -43,7 +43,10 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {
+	"Postman Settings": "frappe_postman_sync/doctype/postman_settings/postman_settings.js",
+	"API Generator": "frappe_postman_sync/doctype/api_generator/api_generator.js",
+}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -86,7 +89,7 @@ app_license = "mit"
 # ------------
 
 # before_install = "frappe_postman_sync.install.before_install"
-# after_install = "frappe_postman_sync.install.after_install"
+after_install = "frappe_postman_sync.services.sync_existing_doctypes"
 
 # Uninstallation
 # ------------
@@ -132,13 +135,12 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"DocType": {
+		"after_insert": "frappe_postman_sync.services.auto_generate_api_for_doctype",
+		"on_update": "frappe_postman_sync.services.auto_generate_api_for_doctype",
+	}
+}
 
 # Scheduled Tasks
 # ---------------
@@ -236,4 +238,3 @@ app_license = "mit"
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
-
