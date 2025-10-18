@@ -12,6 +12,7 @@
     "doctype_name",
     "module_name",
     "status",
+    "collection_title",
     "column_break_5",
     "auto_generate",
     "created_by_doctype",
@@ -35,7 +36,6 @@
       "depends_on": "generation_type",
       "fieldname": "doctype_name",
       "fieldtype": "Link",
-      "hidden_depends_on": "generation_type!=Single DocType",
       "in_list_view": 1,
       "label": "DocType Name",
       "options": "DocType"
@@ -44,7 +44,6 @@
       "depends_on": "generation_type",
       "fieldname": "module_name",
       "fieldtype": "Link",
-      "hidden_depends_on": "generation_type!=Entire Module",
       "in_list_view": 1,
       "label": "Module Name",
       "options": "Module Def"
@@ -56,6 +55,12 @@
       "in_list_view": 1,
       "label": "Status",
       "options": "Active\nInactive\nError"
+    },
+    {
+      "fieldname": "collection_title",
+      "fieldtype": "Data",
+      "label": "Collection Title",
+      "reqd": 1
     },
     {
       "fieldname": "column_break_5",
@@ -107,7 +112,7 @@
   ],
   "index_web_pages_for_search": 1,
   "links": [],
-  "modified": "2025-10-18 13:10:07.172291",
+  "modified": "2025-10-18 19:09:49.377164",
   "modified_by": "Administrator",
   "module": "Frappe Postman Sync",
   "name": "API Generator",

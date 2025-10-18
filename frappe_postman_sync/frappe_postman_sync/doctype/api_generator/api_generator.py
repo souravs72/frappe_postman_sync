@@ -9,12 +9,42 @@ from frappe.model.document import Document
 
 class APIGenerator(Document):
     def validate(self):
+        # Prevent cyclic issues during validation
+        if (
+            self.generation_type == "Single DocType"
+            and self.doctype_name == "API Generator"
+        ):
+            frappe.throw(
+                "Cannot create API Generator for 'API Generator' DocType to prevent cyclic issues"
+            )
+
+        if (
+            self.generation_type == "Entire Module"
+            and self.module_name == "Frappe Postman Sync"
+        ):
+            # Check if this module contains API Generator
+            module_doctypes = frappe.get_all(
+                "DocType", filters={"module": "Frappe Postman Sync"}, fields=["name"]
+            )
+            doctype_names = [dt.name for dt in module_doctypes]
+            if "API Generator" in doctype_names:
+                frappe.throw(
+                    "Cannot generate APIs for 'Frappe Postman Sync' module as it contains 'API Generator' DocType (would cause cyclic issues)"
+                )
+
         # Set the name based on generation type
         if not self.name or self.name.startswith("NEW"):
             if self.generation_type == "Single DocType" and self.doctype_name:
                 self.name = self.doctype_name
             elif self.generation_type == "Entire Module" and self.module_name:
                 self.name = f"{self.module_name} Module"
+
+        # Set default collection title if not provided
+        if not self.collection_title:
+            if self.generation_type == "Single DocType" and self.doctype_name:
+                self.collection_title = f"{self.doctype_name} API Collection"
+            elif self.generation_type == "Entire Module" and self.module_name:
+                self.collection_title = f"{self.module_name} Module API Collection"
 
         if self.auto_generate:
             self.generate_api_endpoints()
@@ -36,6 +66,12 @@ class APIGenerator(Document):
         """Generate CRUD API endpoints for a single doctype"""
         if not self.doctype_name:
             frappe.throw("DocType Name is required for Single DocType generation")
+
+        # Prevent cyclic issues - don't generate APIs for API Generator itself
+        if self.doctype_name == "API Generator":
+            frappe.throw(
+                "Cannot generate APIs for API Generator DocType to prevent cyclic issues"
+            )
 
         # Get doctype meta information
         doctype_meta = frappe.get_meta(self.doctype_name)
@@ -73,10 +109,19 @@ class APIGenerator(Document):
         all_endpoints = {}
         generated_count = 0
 
+        # Get all whitelisted methods for the module (only once for module-based generation)
+        module_whitelisted_methods = self.get_module_whitelisted_methods()
+
         for doctype in doctypes:
             try:
                 doctype_name = doctype.name
                 endpoints = self.build_crud_endpoints(doctype_name)
+
+                # For module-based generation, add whitelisted methods to the first DocType
+                # to avoid duplicates
+                if generated_count == 0 and module_whitelisted_methods:
+                    endpoints.extend(module_whitelisted_methods)
+
                 all_endpoints[doctype_name] = endpoints
                 generated_count += 1
             except Exception as e:
@@ -124,7 +169,7 @@ class APIGenerator(Document):
             },
             {
                 "method": "GET",
-                "path": f"/api/resource/{doctype_name}/{{name}}",
+                "path": f"/api/resource/{doctype_name}/{{{{name}}}}",
                 "description": f"Get specific {doctype_name} record by name",
                 "parameters": [
                     {
@@ -150,7 +195,7 @@ class APIGenerator(Document):
             },
             {
                 "method": "PUT",
-                "path": f"/api/resource/{doctype_name}/{{name}}",
+                "path": f"/api/resource/{doctype_name}/{{{{name}}}}",
                 "description": f"Update existing {doctype_name} record",
                 "parameters": [
                     {
@@ -169,7 +214,7 @@ class APIGenerator(Document):
             },
             {
                 "method": "DELETE",
-                "path": f"/api/resource/{doctype_name}/{{name}}",
+                "path": f"/api/resource/{doctype_name}/{{{{name}}}}",
                 "description": f"Delete {doctype_name} record",
                 "parameters": [
                     {
@@ -220,9 +265,14 @@ class APIGenerator(Document):
         whitelisted_methods = []
 
         try:
-            # Get the doctype controller module
-            doctype_meta = frappe.get_meta(doctype_name)
-            module_name = doctype_meta.module
+            # Determine the module name
+            if self.generation_type == "Entire Module":
+                # For module-based generation, use the module name directly
+                module_name = self.module_name
+            else:
+                # For single doctype generation, get the module from the doctype meta
+                doctype_meta = frappe.get_meta(doctype_name)
+                module_name = doctype_meta.module
 
             # Use the enhanced whitelist scanner
             from frappe_postman_sync.whitelist_scanner import (
@@ -233,10 +283,24 @@ class APIGenerator(Document):
 
             # Filter methods relevant to this doctype
             for method in app_methods:
-                if (
-                    doctype_name.lower().replace(" ", "_")
-                    in method.get("path", "").lower()
-                ):
+                method_path = method.get("path", "").lower()
+                doctype_lower = doctype_name.lower().replace(" ", "_")
+
+                # For module-based generation, include all methods from the module
+                # For single doctype generation, filter by doctype name
+                should_include = False
+
+                if self.generation_type == "Entire Module":
+                    # Include all methods from the module
+                    should_include = True
+                else:
+                    # For single doctype, check if method is relevant to this doctype
+                    should_include = (
+                        doctype_lower in method_path
+                        or doctype_name.lower() in method_path
+                    )
+
+                if should_include:
                     method_info = {
                         "method": "POST",
                         "path": f"/api/method/{method['path']}",
@@ -359,6 +423,59 @@ class APIGenerator(Document):
             frappe.log_error(
                 f"Error extracting whitelisted methods: {e!s}",
                 "Method Extraction Error",
+            )
+
+        return whitelisted_methods
+
+    def get_module_whitelisted_methods(self):
+        """Get all whitelisted methods for the entire module"""
+        whitelisted_methods = []
+
+        try:
+            if not self.module_name:
+                return whitelisted_methods
+
+            # Use the enhanced whitelist scanner
+            from frappe_postman_sync.whitelist_scanner import (
+                scan_app_for_whitelisted_methods,
+            )
+
+            app_methods = scan_app_for_whitelisted_methods(self.module_name)
+
+            # Include all methods from the module
+            for method in app_methods:
+                method_info = {
+                    "method": "POST",
+                    "path": f"/api/method/{method['path']}",
+                    "description": method.get(
+                        "description",
+                        f"Custom method: {method.get('method_name', 'Unknown')}",
+                    ),
+                    "parameters": [
+                        {
+                            "name": "args",
+                            "type": "body",
+                            "description": "Method arguments",
+                            "required": False,
+                        },
+                        {
+                            "name": "kwargs",
+                            "type": "body",
+                            "description": "Method keyword arguments",
+                            "required": False,
+                        },
+                    ],
+                    "custom_method": True,
+                    "method_name": method.get(
+                        "method_name", method["path"].split(".")[-1]
+                    ),
+                }
+                whitelisted_methods.append(method_info)
+
+        except Exception as e:
+            frappe.log_error(
+                f"Error getting module whitelisted methods: {e!s}",
+                "Module Whitelist Methods Error",
             )
 
         return whitelisted_methods

@@ -48,7 +48,13 @@ class PostmanSetting(Document):
             api_generators = frappe.get_all(
                 "API Generator",
                 filters={"status": "Active"},
-                fields=["name", "doctype_name", "generation_type", "api_endpoints"],
+                fields=[
+                    "name",
+                    "doctype_name",
+                    "generation_type",
+                    "api_endpoints",
+                    "collection_title",
+                ],
             )
 
             for api_gen in api_generators:
@@ -68,6 +74,12 @@ class PostmanSetting(Document):
             api_key = self.get_password("postman_api_key")
             headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
 
+            # Update collection name if collection_title is provided
+            if api_generator.get("collection_title"):
+                self.update_postman_collection_name(
+                    api_generator["collection_title"], headers
+                )
+
             # Parse API endpoints from JSON string
             api_endpoints = (
                 json.loads(api_generator.api_endpoints)
@@ -75,43 +87,206 @@ class PostmanSetting(Document):
                 else api_generator.api_endpoints
             )
 
+            # Build all collection items organized by folders
+            collection_items = []
+
             # Handle both single doctype and module generation
             if api_generator.generation_type == "Entire Module":
-                # For module generation, api_endpoints is a dict with doctype names as keys
-                for doctype_name, endpoints in api_endpoints.items():
-                    for endpoint in endpoints:
-                        item_data = self.build_postman_item(endpoint, doctype_name)
-                        self._create_postman_request(item_data, headers)
+                # Get the module name from the API generator
+                module_name = api_generator.module_name
+
+                # Only create a module folder if module_name is properly set
+                if module_name and module_name != "Unknown Module":
+                    module_folder = {
+                        "name": f"{module_name} Module",
+                        "description": f"APIs for {module_name} module",
+                        "item": [],
+                    }
+
+                    # For module generation, api_endpoints is a dict with doctype names as keys
+                    for doctype_name, endpoints in api_endpoints.items():
+                        # Create a subfolder for each DocType within the module
+                        doctype_folder = {
+                            "name": doctype_name,
+                            "description": f"APIs for {doctype_name} DocType",
+                            "item": [],
+                        }
+
+                        for endpoint in endpoints:
+                            item_data = self.build_postman_item(endpoint, doctype_name)
+                            doctype_folder["item"].append(item_data)
+
+                        module_folder["item"].append(doctype_folder)
+
+                    collection_items.append(module_folder)
+                else:
+                    # If module name is not set or is "Unknown Module", create DocType folders directly
+                    # without the outer module folder
+                    for doctype_name, endpoints in api_endpoints.items():
+                        doctype_folder = {
+                            "name": doctype_name,
+                            "description": f"APIs for {doctype_name} DocType",
+                            "item": [],
+                        }
+
+                        for endpoint in endpoints:
+                            item_data = self.build_postman_item(endpoint, doctype_name)
+                            doctype_folder["item"].append(item_data)
+
+                        collection_items.append(doctype_folder)
             else:
-                # For single doctype generation, api_endpoints is a list
+                # For single doctype generation, create a folder for the DocType
+                doctype_folder = {
+                    "name": api_generator.doctype_name,
+                    "description": f"APIs for {api_generator.doctype_name} DocType",
+                    "item": [],
+                }
+
                 for endpoint in api_endpoints:
                     item_data = self.build_postman_item(
                         endpoint, api_generator.doctype_name
                     )
-                    self._create_postman_request(item_data, headers)
+                    doctype_folder["item"].append(item_data)
+
+                collection_items.append(doctype_folder)
+
+            # Update the entire collection at once
+            self._update_postman_collection(collection_items, headers)
 
         except Exception as e:
             frappe.log_error(
                 f"Error creating Postman collection items: {e!s}", "Postman Sync Error"
             )
 
-    def _create_postman_request(self, item_data, headers):
-        """Helper method to create a single Postman request"""
+    def _update_postman_collection(self, collection_items, headers):
+        """Helper method to append new items to Postman collection (preserves existing items)"""
         try:
-            url = (
-                f"https://api.getpostman.com/collections/{self.collection_id}/requests"
-            )
-            response = requests.post(url, headers=headers, json=item_data, timeout=10)
+            # Get current collection
+            url = f"https://api.getpostman.com/collections/{self.collection_id}"
+            response = requests.get(url, headers=headers, timeout=10)
 
-            if response.status_code not in [200, 201]:
+            if response.status_code != 200:
                 frappe.log_error(
-                    f"Failed to create Postman item: {response.text}",
+                    f"Failed to fetch collection: {response.text}",
                     "Postman API Error",
+                )
+                return
+
+            collection_data = response.json()
+            collection_info = collection_data.get("collection", {})
+
+            # Get existing items
+            existing_items = collection_info.get("item", [])
+
+            # Create a mapping of existing folder names to their items
+            existing_folders = {item.get("name", ""): item for item in existing_items}
+
+            # Process new items - either add new folders or update existing ones
+            updated_items = existing_items.copy()
+            new_items = []
+
+            for item in collection_items:
+                folder_name = item.get("name", "")
+                if folder_name in existing_folders:
+                    # Update existing folder with new endpoints
+                    existing_folder = existing_folders[folder_name]
+                    existing_endpoints = existing_folder.get("item", [])
+                    new_endpoints = item.get("item", [])
+
+                    # Create a set of existing endpoint names to avoid duplicates
+                    existing_endpoint_names = {
+                        ep.get("name", "") for ep in existing_endpoints
+                    }
+
+                    # Add only new endpoints
+                    for new_endpoint in new_endpoints:
+                        if new_endpoint.get("name", "") not in existing_endpoint_names:
+                            existing_endpoints.append(new_endpoint)
+
+                    # Update the existing folder in the list
+                    for i, existing_item in enumerate(updated_items):
+                        if existing_item.get("name", "") == folder_name:
+                            updated_items[i] = existing_folder
+                            break
+                else:
+                    # Add new folder
+                    new_items.append(item)
+
+            # Add new folders to the list
+            if new_items:
+                updated_items.extend(new_items)
+
+            if new_items or any(
+                folder_name in existing_folders
+                for folder_name in [item.get("name", "") for item in collection_items]
+            ):
+                # Update the collection with all items
+                collection_info["item"] = updated_items
+
+                # Update the collection
+                update_payload = {"collection": collection_info}
+                update_response = requests.put(
+                    url, headers=headers, json=update_payload, timeout=10
+                )
+
+                if update_response.status_code not in [200, 201]:
+                    frappe.log_error(
+                        f"Failed to update collection: {update_response.text}",
+                        "Postman API Error",
+                    )
+                else:
+                    frappe.msgprint(
+                        f"Added {len(new_items)} new API endpoints to Postman collection"
+                    )
+            else:
+                frappe.msgprint(
+                    "No new API endpoints to add (all endpoints already exist)"
                 )
 
         except Exception as e:
             frappe.log_error(
-                f"Error creating Postman request: {e!s}", "Postman Sync Error"
+                f"Error updating Postman collection: {e!s}", "Postman Sync Error"
+            )
+
+    def update_postman_collection_name(self, collection_title, headers):
+        """Update the Postman collection name"""
+        try:
+            url = f"https://api.getpostman.com/collections/{self.collection_id}"
+
+            # Get current collection
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code != 200:
+                frappe.log_error(
+                    f"Failed to fetch collection for name update: {response.text}",
+                    "Postman API Error",
+                )
+                return
+
+            collection_data = response.json()
+            collection_info = collection_data.get("collection", {})
+
+            # Update the collection name
+            collection_info["info"]["name"] = collection_title
+
+            # Update the collection
+            update_payload = {"collection": collection_info}
+            update_response = requests.put(
+                url, headers=headers, json=update_payload, timeout=10
+            )
+
+            if update_response.status_code not in [200, 201]:
+                frappe.log_error(
+                    f"Failed to update collection name: {update_response.text}",
+                    "Postman API Error",
+                )
+            else:
+                frappe.msgprint(
+                    f"Updated Postman collection name to: {collection_title}"
+                )
+
+        except Exception as e:
+            frappe.log_error(
+                f"Error updating Postman collection name: {e!s}", "Postman Sync Error"
             )
 
     def build_postman_item(self, endpoint, doctype_name):
@@ -122,7 +297,34 @@ class PostmanSetting(Document):
                 f"{endpoint['method']} {endpoint.get('method_name', 'Custom Method')}"
             )
         else:
-            item_name = f"{endpoint['method']} {endpoint['path']}"
+            # Create professional request names based on method and operation
+            method = endpoint["method"]
+            path = endpoint["path"]
+
+            if method == "GET" and "{{name}}" in path:
+                item_name = f"{doctype_name} by ID"
+            elif method == "GET" and "{{name}}" not in path:
+                item_name = f"List {doctype_name} Records"
+            elif method == "POST":
+                item_name = f"Create {doctype_name} Record"
+            elif method == "PUT":
+                item_name = f"Update {doctype_name} Record"
+            elif method == "DELETE":
+                item_name = f"Delete {doctype_name} Record"
+            elif method == "PATCH":
+                item_name = f"Patch {doctype_name} Record"
+            elif "reportview" in path:
+                item_name = f"Advanced {doctype_name} Query"
+            else:
+                # For other variables, use the variable name
+                import re
+
+                variables = re.findall(r"\{\{(\w+)\}\}", path)
+                if variables:
+                    var_name = variables[0]
+                    item_name = f"{doctype_name} by {var_name.title()}"
+                else:
+                    item_name = f"{method} {doctype_name} Operation"
 
         # Build request body for POST/PUT requests
         request_body = None
@@ -155,15 +357,28 @@ class PostmanSetting(Document):
 
         parsed_url = urlparse(full_url)
 
-        # Extract path segments (remove empty strings)
-        path_segments = [seg for seg in parsed_url.path.split("/") if seg]
+        # Extract host and port
+        host_parts = parsed_url.netloc.split(":")
+        host = host_parts[0] if host_parts else "localhost"
+        port = host_parts[1] if len(host_parts) > 1 else None
 
+        # Build path array with proper handling of Postman variables
+        path_segments = []
+        for segment in parsed_url.path.split("/"):
+            if segment:  # Skip empty segments
+                path_segments.append(segment)
+
+        # Build URL data structure for Postman API
         url_data = {
             "raw": full_url,
             "protocol": parsed_url.scheme or "http",
-            "host": [parsed_url.netloc] if parsed_url.netloc else [],
+            "host": [host],
             "path": path_segments,
         }
+
+        # Add port if it exists
+        if port:
+            url_data["port"] = port
 
         # Add query parameters if they exist
         if parsed_url.query:
@@ -231,6 +446,7 @@ class PostmanSetting(Document):
 
             # Fields that are system-managed and should not be in request body
             excluded_fieldnames = [
+                # Auditable fields
                 "creation",
                 "modified",
                 "modified_by",
@@ -240,6 +456,7 @@ class PostmanSetting(Document):
                 "amended_from",
                 "creation_date",
                 "modified_date",
+                # User-specific system fields
                 "user",
                 "user_type",
                 "last_login",
@@ -247,9 +464,42 @@ class PostmanSetting(Document):
                 "logout_time",
                 "last_ip",
                 "last_login_ip",
-                "user_type",
                 "api_key",
                 "api_secret",
+                # Additional system fields
+                "read_only",
+                "naming_series",
+                "parent",
+                "parenttype",
+                "parentfield",
+                "is_system_generated",
+                "version",
+                "old_parent",
+                "lft",
+                "rgt",
+                "is_group",
+                "is_folder",
+                "is_home_folder",
+                "is_public",
+                "is_default",
+                "is_active",
+                "disabled",
+                "enabled",
+                "hidden",
+                "sort_order",
+                "order_by",
+                "group_by",
+                "color",
+                "icon",
+                "css_class",
+                "custom_css",
+                "javascript",
+                "workflow_state",
+                "workflow_action",
+                "workflow_comment",
+                "workflow_comment_by",
+                "workflow_comment_date",
+                "workflow_comment_time",
             ]
 
             for field in doctype_meta.fields:

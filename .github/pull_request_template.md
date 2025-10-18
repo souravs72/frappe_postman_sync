@@ -18,40 +18,40 @@
 
 <!-- Mark the relevant options with an "x" -->
 
-- [ ] ✅ Tested on fresh Frappe installation
-- [ ] ✅ Tested API generation functionality
-- [ ] ✅ Tested Postman sync
-- [ ] ✅ No breaking changes introduced
-- [ ] ✅ All existing tests pass
-- [ ] ✅ New tests added for new functionality
+- [ ] Tested on fresh Frappe installation
+- [ ] Tested API generation functionality
+- [ ] Tested Postman sync
+- [ ] No breaking changes introduced
+- [ ] All existing tests pass
+- [ ] New tests added for new functionality
 
 ## Security Checklist
 
 <!-- Mark the relevant options with an "x" -->
 
-- [ ] ✅ No hardcoded secrets or API keys
-- [ ] ✅ No sensitive data in logs
-- [ ] ✅ Input validation implemented where needed
-- [ ] ✅ Follows Frappe security best practices
+- [ ] No hardcoded secrets or API keys
+- [ ] No sensitive data in logs
+- [ ] Input validation implemented where needed
+- [ ] Follows Frappe security best practices
 
 ## Code Quality
 
 <!-- Mark the relevant options with an "x" -->
 
-- [ ] ✅ Code follows project style guidelines
-- [ ] ✅ Self-review of code completed
-- [ ] ✅ Code is generic and reusable
-- [ ] ✅ No unnecessary dependencies added
-- [ ] ✅ Proper error handling implemented
+- [ ] Code follows project style guidelines
+- [ ] Self-review of code completed
+- [ ] Code is generic and reusable
+- [ ] No unnecessary dependencies added
+- [ ] Proper error handling implemented
 
 ## Documentation
 
 <!-- Mark the relevant options with an "x" -->
 
-- [ ] ✅ README.md updated if needed
-- [ ] ✅ Code comments added for complex logic
-- [ ] ✅ API documentation updated if applicable
-- [ ] ✅ Changelog updated (if applicable)
+- [ ] README.md updated if needed
+- [ ] Code comments added for complex logic
+- [ ] API documentation updated if applicable
+- [ ] Changelog updated (if applicable)
 
 ## Breaking Changes
 

@@ -50,7 +50,7 @@ Configure these rules on GitHub:
 Similar rules but with:
 
 - Required reviewers: 0 (for maintainers)
-- Allow force pushes: ✅ (for maintainers only)
+- Allow force pushes: (for maintainers only)
 
 ## Release Process
 
