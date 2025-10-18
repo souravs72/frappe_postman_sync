@@ -1,59 +1,127 @@
-[project]
-name = "frappe_postman_sync"
-authors = [
-    { name = "Sourav Singh", email = "souravsingh2609@gmail.com"}
-]
-description = "A developer utility app that automatically generates and syncs REST API endpoints from your Frappe site to Postman."
-requires-python = ">=3.10"
-readme = "README.md"
-dynamic = ["version"]
-dependencies = [
-    # "frappe~=15.0.0" # Installed and managed by bench.
-]
-
 [build-system]
-requires = ["flit_core >=3.4,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
-# These dependencies are only installed when developer mode is enabled
-[tool.bench.dev-dependencies]
-# package_name = "~=1.1.0"
+[project]
+name = "frappe-postman-sync"
+version = "1.0.0"
+description = "Automatically generate and sync CRUD APIs to Postman for Frappe DocTypes"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Frappe Postman Sync Team", email = "maintainers@example.com"},
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Framework :: Frappe",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Testing",
+]
+keywords = ["frappe", "postman", "api", "crud", "automation", "testing"]
+dependencies = [
+    "frappe>=14.0.0",
+    "requests>=2.25.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "black>=23.0.0",
+    "pre-commit>=3.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/frappe-postman-sync"
+Documentation = "https://github.com/yourusername/frappe-postman-sync#readme"
+Repository = "https://github.com/yourusername/frappe-postman-sync.git"
+Issues = "https://github.com/yourusername/frappe-postman-sync/issues"
+Changelog = "https://github.com/yourusername/frappe-postman-sync/blob/main/CHANGELOG.md"
+
+[project.scripts]
+frappe-postman-sync = "frappe_postman_sync.cli:main"
 
 [tool.ruff]
-line-length = 110
-target-version = "py310"
-
-[tool.ruff.lint]
+target-version = "py38"
+line-length = 88
 select = [
-    "F",
-    "E",
-    "W",
-    "I",
-    "UP",
-    "B",
-    "RUF",
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
 ]
 ignore = [
-    "B017", # assertRaises(Exception) - should be more specific
-    "B018", # useless expression, not assigned to anything
-    "B023", # function doesn't bind loop variable - will have last iteration's value
-    "B904", # raise inside except without from
-    "E101", # indentation contains mixed spaces and tabs
-    "E402", # module level import not at top of file
-    "E501", # line too long
-    "E741", # ambiguous variable name
-    "F401", # "unused" imports
-    "F403", # can't detect undefined names from * import
-    "F405", # can't detect undefined names from * import
-    "F722", # syntax error in forward type annotation
-    "W191", # indentation contains tabs
-    "UP030", # Use implicit references for positional format fields (translations)
-    "UP031", # Use format specifiers instead of percent format
-    "UP032", # Use f-string instead of `format` call (translations)
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
 ]
-typing-modules = ["frappe.types.DF"]
 
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "tab"
-docstring-code-format = true
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["frappe_postman_sync"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
