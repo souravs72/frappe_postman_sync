@@ -286,3 +286,214 @@ def check_collection_contents():
         print(f"❌ Error checking collection: {e!s}")
         frappe.log_error(f"Error checking collection: {e!s}", "Check Collection Error")
         return False
+
+
+def check_api_generator_status(doc_name):
+    """Check the status of an API Generator document"""
+    try:
+        print(f"🔍 Checking API Generator document: {doc_name}")
+        api_gen = frappe.get_doc("API Generator", doc_name)
+
+        print(f"📊 Status: {api_gen.status}")
+        print(f"📊 Generation Type: {api_gen.generation_type}")
+        print(f"📊 Module: {api_gen.module_name}")
+        print(f"📊 Collection Title: {api_gen.collection_title}")
+        print(f"📊 Auto Generate: {api_gen.auto_generate}")
+
+        if api_gen.api_endpoints:
+            endpoints = (
+                json.loads(api_gen.api_endpoints)
+                if isinstance(api_gen.api_endpoints, str)
+                else api_gen.api_endpoints
+            )
+            print(f"📊 Endpoints Count: {len(endpoints)}")
+            print("📊 First few endpoints:")
+            for i, endpoint in enumerate(endpoints[:5]):
+                print(
+                    f"  {i + 1}. {endpoint.get('method', 'Unknown')} {endpoint.get('path', 'Unknown')}"
+                )
+        else:
+            print("📊 No endpoints generated")
+
+        return True
+    except Exception as e:
+        print(f"❌ Error checking API Generator: {e!s}")
+        frappe.log_error(
+            f"Error checking API Generator: {e!s}", "Check API Generator Error"
+        )
+        return False
+
+
+def trigger_manual_sync(doc_name):
+    """Manually trigger Postman sync for an API Generator document"""
+    try:
+        print(f"🔄 Triggering manual sync for: {doc_name}")
+        api_gen = frappe.get_doc("API Generator", doc_name)
+        api_gen.trigger_postman_sync()
+        print("✅ Postman sync triggered successfully")
+        return True
+    except Exception as e:
+        print(f"❌ Error triggering sync: {e!s}")
+        frappe.log_error(f"Error triggering sync: {e!s}", "Manual Sync Error")
+        return False
+
+
+def check_postman_settings():
+    """Check Postman settings configuration"""
+    try:
+        print("🔍 Checking Postman Settings...")
+        postman_setting = frappe.get_single("Postman Setting")
+
+        print(f"📊 Status: {postman_setting.status}")
+        print(f"📊 Auto Sync: {postman_setting.enable_auto_sync}")
+        print(f"📊 Collection ID: {postman_setting.collection_id}")
+        print(f"📊 Workspace ID: {postman_setting.workspace_id}")
+
+        api_key = postman_setting.get_password("postman_api_key")
+        print(f"📊 API Key Set: {bool(api_key)}")
+
+        if api_key:
+            print(f"📊 API Key Length: {len(api_key)} characters")
+
+        return True
+    except Exception as e:
+        print(f"❌ Error checking Postman settings: {e!s}")
+        frappe.log_error(
+            f"Error checking Postman settings: {e!s}", "Check Postman Settings Error"
+        )
+        return False
+
+
+def test_postman_api():
+    """Test Postman API connection"""
+    try:
+        print("🔍 Testing Postman API connection...")
+        postman_setting = frappe.get_single("Postman Setting")
+
+        import requests
+
+        api_key = postman_setting.get_password("postman_api_key")
+        headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+
+        url = f"https://api.getpostman.com/collections/{postman_setting.collection_id}"
+        response = requests.get(url, headers=headers, timeout=10)
+
+        print(f"📊 Status Code: {response.status_code}")
+        print(f"📊 Collection ID: {postman_setting.collection_id}")
+
+        if response.status_code == 200:
+            collection_data = response.json()
+            items = collection_data.get("collection", {}).get("item", [])
+            print(
+                f"📊 Collection Name: {collection_data.get('collection', {}).get('info', {}).get('name', 'Unknown')}"
+            )
+            print(f"📊 Items Count: {len(items)}")
+            print("✅ Postman API connection successful")
+        else:
+            print(f"❌ Postman API error: {response.text}")
+
+        return response.status_code == 200
+    except Exception as e:
+        print(f"❌ Error testing Postman API: {e!s}")
+        frappe.log_error(f"Error testing Postman API: {e!s}", "Test Postman API Error")
+        return False
+
+
+def debug_sync_process(doc_name):
+    """Debug the sync process to see what's happening"""
+    try:
+        print(f"🔍 Debugging sync process for: {doc_name}")
+        api_gen = frappe.get_doc("API Generator", doc_name)
+        postman_setting = frappe.get_single("Postman Setting")
+
+        # Check if endpoints exist
+        if api_gen.api_endpoints:
+            endpoints = (
+                json.loads(api_gen.api_endpoints)
+                if isinstance(api_gen.api_endpoints, str)
+                else api_gen.api_endpoints
+            )
+            print(f"📊 Endpoints found: {len(endpoints)}")
+            print(f"📊 First endpoint: {endpoints[0] if endpoints else 'None'}")
+        else:
+            print("❌ No endpoints in API Generator")
+            return False
+
+        # Test the build collection items method
+        print("🔍 Testing _build_collection_items_fast method...")
+        new_items = postman_setting._build_collection_items_fast(api_gen, endpoints)
+        print(f"📊 Built items: {len(new_items)}")
+
+        if new_items:
+            print(f"📊 First item: {new_items[0].get('name', 'Unknown')}")
+            print(f"📊 First item sub-items: {len(new_items[0].get('item', []))}")
+
+        # Test the merge method
+        print("🔍 Testing _merge_collection_items_fast method...")
+        existing_items = []
+        final_items = postman_setting._merge_collection_items_fast(
+            existing_items, new_items
+        )
+        print(f"📊 Final items: {len(final_items)}")
+
+        return True
+    except Exception as e:
+        print(f"❌ Error debugging sync: {e!s}")
+        frappe.log_error(f"Error debugging sync: {e!s}", "Debug Sync Error")
+        return False
+
+
+def get_latest_error_log():
+    """Get the latest error log"""
+    try:
+        error_logs = frappe.get_all(
+            "Error Log",
+            filters={"method": ["like", "%sync%"]},
+            fields=["name", "creation", "error"],
+            order_by="creation desc",
+            limit=1,
+        )
+
+        if error_logs:
+            error_log = frappe.get_doc("Error Log", error_logs[0]["name"])
+            print("📊 Latest Error Log:")
+            print(f"Error: {error_log.error}")
+        else:
+            print("No error logs found")
+
+        return True
+    except Exception as e:
+        print(f"❌ Error getting error log: {e!s}")
+        return False
+
+
+def check_endpoint_structure(doc_name):
+    """Check the structure of endpoints in API Generator"""
+    try:
+        print(f"🔍 Checking endpoint structure for: {doc_name}")
+        api_gen = frappe.get_doc("API Generator", doc_name)
+
+        if api_gen.api_endpoints:
+            endpoints = (
+                json.loads(api_gen.api_endpoints)
+                if isinstance(api_gen.api_endpoints, str)
+                else api_gen.api_endpoints
+            )
+            print(f"📊 Type: {type(endpoints)}")
+            print(f"📊 Length: {len(endpoints)}")
+
+            if isinstance(endpoints, dict):
+                print(f"📊 Keys: {list(endpoints.keys())[:5]}")
+                print(
+                    f"📊 First key endpoints: {len(endpoints[list(endpoints.keys())[0]])}"
+                )
+            else:
+                print(f"📊 First item: {endpoints[0] if endpoints else None}")
+
+        else:
+            print("❌ No endpoints found")
+
+        return True
+    except Exception as e:
+        print(f"❌ Error checking endpoint structure: {e!s}")
+        return False

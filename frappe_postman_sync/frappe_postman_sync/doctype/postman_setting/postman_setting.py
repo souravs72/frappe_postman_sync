@@ -283,7 +283,7 @@ class PostmanSetting(Document):
 
             # Update collection name if provided
             if api_generator.get("collection_title"):
-                collection_info["info"]["name"] = api_generator["collection_title"]
+                collection_info["info"]["name"] = api_generator.get("collection_title")
 
             # Parse API endpoints
             api_endpoints = (
@@ -319,13 +319,22 @@ class PostmanSetting(Document):
                 )
 
         except Exception as e:
-            frappe.log_error(
-                f"Error in optimized sync: {e!s}", "Optimized Postman Sync Error"
-            )
+            import traceback
+
+            error_msg = f"Error in optimized sync: {e!s}\n\nTraceback:\n{traceback.format_exc()}"
+            print(f"❌ {error_msg}")
+            frappe.log_error(error_msg, "Optimized Postman Sync Error")
 
     def _build_collection_items_fast(self, api_generator, api_endpoints):
         """Build collection items efficiently without multiple API calls"""
         collection_items = []
+
+        try:
+            print(
+                f"🔍 Building collection items - Type: {type(api_endpoints)}, Length: {len(api_endpoints) if hasattr(api_endpoints, '__len__') else 'N/A'}"
+            )
+        except Exception as e:
+            print(f"🔍 Error in debugging: {e}")
 
         if api_generator.generation_type == "Entire Module":
             module_name = api_generator.module_name
@@ -338,31 +347,54 @@ class PostmanSetting(Document):
                     "item": [],
                 }
 
-                for doctype_name, endpoints in api_endpoints.items():
-                    doctype_folder = {
-                        "name": doctype_name,
-                        "description": f"APIs for {doctype_name} DocType",
-                        "item": [],
-                    }
+                # Check if api_endpoints is a dict with DocType names as keys
+                if isinstance(api_endpoints, dict):
+                    for doctype_name, endpoints in api_endpoints.items():
+                        doctype_folder = {
+                            "name": doctype_name,
+                            "description": f"APIs for {doctype_name} DocType",
+                            "item": [],
+                        }
 
-                    for endpoint in endpoints:
-                        item_data = self.build_postman_item(endpoint, doctype_name)
-                        doctype_folder["item"].append(item_data)
+                        for endpoint in endpoints:
+                            item_data = self.build_postman_item(endpoint, doctype_name)
+                            doctype_folder["item"].append(item_data)
 
-                    module_folder["item"].append(doctype_folder)
+                        module_folder["item"].append(doctype_folder)
+                else:
+                    # If api_endpoints is a list, create a single folder
+                    for endpoint in api_endpoints:
+                        item_data = self.build_postman_item(endpoint, module_name)
+                        module_folder["item"].append(item_data)
 
                 collection_items.append(module_folder)
             else:
                 # Create DocType folders directly
-                for doctype_name, endpoints in api_endpoints.items():
+                if isinstance(api_endpoints, dict):
+                    for doctype_name, endpoints in api_endpoints.items():
+                        doctype_folder = {
+                            "name": doctype_name,
+                            "description": f"APIs for {doctype_name} DocType",
+                            "item": [],
+                        }
+
+                        for endpoint in endpoints:
+                            item_data = self.build_postman_item(endpoint, doctype_name)
+                            doctype_folder["item"].append(item_data)
+
+                        collection_items.append(doctype_folder)
+                else:
+                    # If api_endpoints is a list, create a single folder
                     doctype_folder = {
-                        "name": doctype_name,
-                        "description": f"APIs for {doctype_name} DocType",
+                        "name": api_generator.doctype_name or "API Endpoints",
+                        "description": "Generated API endpoints",
                         "item": [],
                     }
 
-                    for endpoint in endpoints:
-                        item_data = self.build_postman_item(endpoint, doctype_name)
+                    for endpoint in api_endpoints:
+                        item_data = self.build_postman_item(
+                            endpoint, api_generator.doctype_name or "API"
+                        )
                         doctype_folder["item"].append(item_data)
 
                     collection_items.append(doctype_folder)
