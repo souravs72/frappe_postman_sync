@@ -138,6 +138,36 @@ class APIGenerator(Document):
         # Trigger Postman sync if enabled
         self.trigger_postman_sync()
 
+    def process_batch_doctypes(self, doctype_names):
+        """Process a batch of DocTypes for optimized module generation"""
+        all_endpoints = {}
+        generated_count = 0
+
+        # Get all whitelisted methods for the module (only once)
+        module_whitelisted_methods = self.get_module_whitelisted_methods()
+
+        for doctype_name in doctype_names:
+            try:
+                endpoints = self.build_crud_endpoints(doctype_name)
+
+                # For module-based generation, add whitelisted methods to the first DocType
+                if generated_count == 0 and module_whitelisted_methods:
+                    endpoints.extend(module_whitelisted_methods)
+
+                all_endpoints[doctype_name] = endpoints
+                generated_count += 1
+
+            except Exception as e:
+                frappe.log_error(
+                    f"Error generating APIs for {doctype_name}: {e!s}",
+                    "Batch API Generation Error",
+                )
+
+        # Store all endpoints as JSON
+        self.api_endpoints = json.dumps(all_endpoints, indent=2)
+        self.status = "Active"
+        self.description = f"Generated APIs for {generated_count} doctypes in batch"
+
     def build_crud_endpoints(self, doctype_name=None):
         """Build CRUD API endpoints for the doctype"""
         if not doctype_name:
@@ -521,14 +551,16 @@ class APIGenerator(Document):
         return whitelisted_methods
 
     def trigger_postman_sync(self):
-        """Trigger Postman sync for this API generator"""
+        """Trigger optimized Postman sync for this API generator"""
         try:
             postman_settings = frappe.get_single("Postman Setting")
+
             if (
                 postman_settings.enable_auto_sync
                 and postman_settings.status == "Active"
             ):
-                postman_settings.sync_to_postman()
+                # Use optimized sync that makes only 2 API calls total
+                postman_settings.sync_single_api_generator_optimized(self)
         except Exception as e:
             frappe.log_error(
                 f"Error triggering Postman sync: {e!s}", "Postman Sync Error"

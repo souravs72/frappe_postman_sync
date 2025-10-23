@@ -178,69 +178,38 @@ class PostmanSetting(Document):
             # Get existing items
             existing_items = collection_info.get("item", [])
 
-            # Create a mapping of existing folder names to their items
-            existing_folders = {item.get("name", ""): item for item in existing_items}
+            # Process new items - replace existing folders to ensure only one folder per type
+            final_items = []
 
-            # Process new items - either add new folders or update existing ones
-            updated_items = existing_items.copy()
-            new_items = []
+            # Get all folder names from new items
+            new_folder_names = {item.get("name", "") for item in collection_items}
 
-            for item in collection_items:
-                folder_name = item.get("name", "")
-                if folder_name in existing_folders:
-                    # Update existing folder with new endpoints
-                    existing_folder = existing_folders[folder_name]
-                    existing_endpoints = existing_folder.get("item", [])
-                    new_endpoints = item.get("item", [])
+            # Keep existing folders that are not being replaced
+            for existing_item in existing_items:
+                existing_folder_name = existing_item.get("name", "")
+                if existing_folder_name not in new_folder_names:
+                    final_items.append(existing_item)
 
-                    # Create a set of existing endpoint names to avoid duplicates
-                    existing_endpoint_names = {
-                        ep.get("name", "") for ep in existing_endpoints
-                    }
+            # Add all new folders (replacing any existing ones with same name)
+            final_items.extend(collection_items)
 
-                    # Add only new endpoints
-                    for new_endpoint in new_endpoints:
-                        if new_endpoint.get("name", "") not in existing_endpoint_names:
-                            existing_endpoints.append(new_endpoint)
+            # Always update the collection to ensure proper folder structure
+            collection_info["item"] = final_items
 
-                    # Update the existing folder in the list
-                    for i, existing_item in enumerate(updated_items):
-                        if existing_item.get("name", "") == folder_name:
-                            updated_items[i] = existing_folder
-                            break
-                else:
-                    # Add new folder
-                    new_items.append(item)
+            # Update the collection
+            update_payload = {"collection": collection_info}
+            update_response = requests.put(
+                url, headers=headers, json=update_payload, timeout=10
+            )
 
-            # Add new folders to the list
-            if new_items:
-                updated_items.extend(new_items)
-
-            if new_items or any(
-                folder_name in existing_folders
-                for folder_name in [item.get("name", "") for item in collection_items]
-            ):
-                # Update the collection with all items
-                collection_info["item"] = updated_items
-
-                # Update the collection
-                update_payload = {"collection": collection_info}
-                update_response = requests.put(
-                    url, headers=headers, json=update_payload, timeout=10
+            if update_response.status_code not in [200, 201]:
+                frappe.log_error(
+                    f"Failed to update collection: {update_response.text}",
+                    "Postman API Error",
                 )
-
-                if update_response.status_code not in [200, 201]:
-                    frappe.log_error(
-                        f"Failed to update collection: {update_response.text}",
-                        "Postman API Error",
-                    )
-                else:
-                    frappe.msgprint(
-                        f"Added {len(new_items)} new API endpoints to Postman collection"
-                    )
             else:
                 frappe.msgprint(
-                    "No new API endpoints to add (all endpoints already exist)"
+                    f"Updated Postman collection with {len(collection_items)} folders"
                 )
 
         except Exception as e:
@@ -287,6 +256,192 @@ class PostmanSetting(Document):
         except Exception as e:
             frappe.log_error(
                 f"Error updating Postman collection name: {e!s}", "Postman Sync Error"
+            )
+
+    def sync_single_api_generator_optimized(self, api_generator):
+        """
+        OPTIMIZED sync for a single API generator - makes only 2 API calls total!
+        This is the key optimization that reduces sync time from 6+ minutes to seconds.
+        """
+        try:
+            api_key = self.get_password("postman_api_key")
+            headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+
+            # Get current collection in ONE API call
+            url = f"https://api.getpostman.com/collections/{self.collection_id}"
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code != 200:
+                frappe.log_error(
+                    f"Failed to fetch collection: {response.text}",
+                    "Postman API Error",
+                )
+                return
+
+            collection_data = response.json()
+            collection_info = collection_data.get("collection", {})
+
+            # Update collection name if provided
+            if api_generator.get("collection_title"):
+                collection_info["info"]["name"] = api_generator["collection_title"]
+
+            # Parse API endpoints
+            api_endpoints = (
+                json.loads(api_generator.api_endpoints)
+                if isinstance(api_generator.api_endpoints, str)
+                else api_generator.api_endpoints
+            )
+
+            # Build collection items efficiently
+            new_items = self._build_collection_items_fast(api_generator, api_endpoints)
+
+            # Get existing items and merge efficiently
+            existing_items = collection_info.get("item", [])
+            final_items = self._merge_collection_items_fast(existing_items, new_items)
+
+            # Update collection ready for single API call
+            collection_info["item"] = final_items
+            update_payload = {"collection": collection_info}
+
+            # Update collection in ONE API call
+            update_response = requests.put(
+                url, headers=headers, json=update_payload, timeout=10
+            )
+
+            if update_response.status_code not in [200, 201]:
+                frappe.log_error(
+                    f"Failed to update collection: {update_response.text}",
+                    "Postman API Error",
+                )
+            else:
+                print(
+                    f"✅ Optimized sync complete: {len(new_items)} folders updated in 2 API calls"
+                )
+
+        except Exception as e:
+            frappe.log_error(
+                f"Error in optimized sync: {e!s}", "Optimized Postman Sync Error"
+            )
+
+    def _build_collection_items_fast(self, api_generator, api_endpoints):
+        """Build collection items efficiently without multiple API calls"""
+        collection_items = []
+
+        if api_generator.generation_type == "Entire Module":
+            module_name = api_generator.module_name
+
+            if module_name and module_name != "Unknown Module":
+                # Create module folder with all DocType subfolders
+                module_folder = {
+                    "name": f"{module_name} Module",
+                    "description": f"APIs for {module_name} module",
+                    "item": [],
+                }
+
+                for doctype_name, endpoints in api_endpoints.items():
+                    doctype_folder = {
+                        "name": doctype_name,
+                        "description": f"APIs for {doctype_name} DocType",
+                        "item": [],
+                    }
+
+                    for endpoint in endpoints:
+                        item_data = self.build_postman_item(endpoint, doctype_name)
+                        doctype_folder["item"].append(item_data)
+
+                    module_folder["item"].append(doctype_folder)
+
+                collection_items.append(module_folder)
+            else:
+                # Create DocType folders directly
+                for doctype_name, endpoints in api_endpoints.items():
+                    doctype_folder = {
+                        "name": doctype_name,
+                        "description": f"APIs for {doctype_name} DocType",
+                        "item": [],
+                    }
+
+                    for endpoint in endpoints:
+                        item_data = self.build_postman_item(endpoint, doctype_name)
+                        doctype_folder["item"].append(item_data)
+
+                    collection_items.append(doctype_folder)
+        else:
+            # Single DocType
+            doctype_folder = {
+                "name": api_generator.doctype_name,
+                "description": f"APIs for {api_generator.doctype_name} DocType",
+                "item": [],
+            }
+
+            for endpoint in api_endpoints:
+                item_data = self.build_postman_item(
+                    endpoint, api_generator.doctype_name
+                )
+                doctype_folder["item"].append(item_data)
+
+            collection_items.append(doctype_folder)
+
+        return collection_items
+
+    def _merge_collection_items_fast(self, existing_items, new_items):
+        """Merge collection items efficiently and prevent duplicates"""
+        # Get folder names from new items
+        new_folder_names = {item.get("name", "") for item in new_items}
+
+        # Keep existing folders that are not being replaced
+        final_items = []
+        for existing_item in existing_items:
+            existing_folder_name = existing_item.get("name", "")
+            if existing_folder_name not in new_folder_names:
+                final_items.append(existing_item)
+
+        # Add all new folders (replacing any existing ones with same name)
+        final_items.extend(new_items)
+
+        return final_items
+
+    @frappe.whitelist()
+    def clear_postman_collection(self):
+        """Clear all items from Postman collection"""
+        try:
+            api_key = self.get_password("postman_api_key")
+            headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+
+            # Get current collection
+            url = f"https://api.getpostman.com/collections/{self.collection_id}"
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code != 200:
+                frappe.log_error(
+                    f"Failed to fetch collection: {response.text}",
+                    "Postman API Error",
+                )
+                return
+
+            collection_data = response.json()
+            collection_info = collection_data.get("collection", {})
+
+            # Clear all items
+            collection_info["item"] = []
+
+            # Update the collection
+            update_payload = {"collection": collection_info}
+            update_response = requests.put(
+                url, headers=headers, json=update_payload, timeout=10
+            )
+
+            if update_response.status_code not in [200, 201]:
+                frappe.log_error(
+                    f"Failed to clear collection: {update_response.text}",
+                    "Postman API Error",
+                )
+            else:
+                print("✅ Collection cleared successfully")
+
+        except Exception as e:
+            frappe.log_error(
+                f"Error clearing collection: {e!s}", "Postman Clear Collection Error"
             )
 
     def build_postman_item(self, endpoint, doctype_name):

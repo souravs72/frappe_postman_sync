@@ -238,3 +238,8 @@ doc_events = {
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
+
+# Bench Commands
+# --------------
+# Add bench commands here
+# bench_commands = ["frappe_postman_sync.commands.postman_sync.postman_sync"]

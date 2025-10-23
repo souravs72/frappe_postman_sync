@@ -5,7 +5,7 @@
 
 set -e
 
-echo "🚀 Setting up Frappe Postman Sync development environment..."
+echo "Setting up Frappe Postman Sync development environment..."
 
 # Colors for output
 RED='\033[0;31m'
