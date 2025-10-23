@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches:
-      - develop
+    branches: [main, develop]
   pull_request:
+    branches: [main, develop]
 
 concurrency:
   group: develop-frappe_postman_sync-${{ github.event.number }}
@@ -14,6 +14,8 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     strategy:
+      matrix:
+        python-version: [3.10, 3.11, 3.12]
       fail-fast: false
     name: Server
 
@@ -36,22 +38,22 @@ jobs:
 
     steps:
       - name: Clone
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
       - name: Find tests
         run: |
           echo "Finding tests"
           grep -rn "def test" > /dev/null
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.10'
+          python-version: ${{ matrix.python-version }}
+          check-latest: true
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v5
         with:
-          node-version: 18
+          node-version: 20
           check-latest: true
 
       - name: Cache pip
@@ -62,7 +64,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
             ${{ runner.os }}-
-
       - name: Get yarn cache directory path
         id: yarn-cache-dir-path
         run: 'echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT'
@@ -74,19 +75,16 @@ jobs:
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
-
       - name: Install MariaDB Client
         run: |
           sudo apt update
           sudo apt-get install mariadb-client
-
       - name: Setup
         run: |
           pip install frappe-bench
           bench init --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
           mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
           mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
-
       - name: Install
         working-directory: /home/runner/frappe-bench
         run: |
@@ -96,7 +94,7 @@ jobs:
           bench --site test_site install-app frappe_postman_sync
           bench build
         env:
-          CI: 'Yes'
+          CI: "Yes"
 
       - name: Run Tests
         working-directory: /home/runner/frappe-bench

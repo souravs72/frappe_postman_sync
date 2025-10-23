@@ -44,8 +44,8 @@ app_license = "mit"
 
 # include js in doctype views
 doctype_js = {
-	"Postman Settings": "frappe_postman_sync/doctype/postman_settings/postman_settings.js",
-	"API Generator": "frappe_postman_sync/doctype/api_generator/api_generator.js",
+    "Postman Settings": "frappe_postman_sync/doctype/postman_settings/postman_settings.js",
+    "API Generator": "frappe_postman_sync/doctype/api_generator/api_generator.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -136,10 +136,10 @@ after_install = "frappe_postman_sync.services.sync_existing_doctypes"
 # Hook on document methods and events
 
 doc_events = {
-	"DocType": {
-		"after_insert": "frappe_postman_sync.services.auto_generate_api_for_doctype",
-		"on_update": "frappe_postman_sync.services.auto_generate_api_for_doctype",
-	}
+    "DocType": {
+        "after_insert": "frappe_postman_sync.services.auto_generate_api_for_doctype",
+        "on_update": "frappe_postman_sync.services.auto_generate_api_for_doctype",
+    }
 }
 
 # Scheduled Tasks
@@ -238,3 +238,8 @@ doc_events = {
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
+
+# Bench Commands
+# --------------
+# Add bench commands here
+# bench_commands = ["frappe_postman_sync.commands.postman_sync.postman_sync"]

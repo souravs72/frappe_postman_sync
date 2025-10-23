@@ -11,7 +11,7 @@ frappe.ui.form.on("API Generator", {
 						frm.reload_doc();
 					});
 				},
-				__("Actions")
+				__("Actions"),
 			);
 
 			frm.add_custom_button(
@@ -19,7 +19,7 @@ frappe.ui.form.on("API Generator", {
 				function () {
 					frm.call("test_endpoints");
 				},
-				__("Actions")
+				__("Actions"),
 			);
 		}
 
@@ -32,7 +32,7 @@ frappe.ui.form.on("API Generator", {
 						frm.reload_doc();
 					});
 				},
-				__("Actions")
+				__("Actions"),
 			);
 		}
 	},

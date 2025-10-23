@@ -11,7 +11,7 @@ frappe.ui.form.on("Postman Setting", {
 					frm.reload_doc();
 				});
 			},
-			__("Actions")
+			__("Actions"),
 		);
 
 		frm.add_custom_button(
@@ -21,7 +21,7 @@ frappe.ui.form.on("Postman Setting", {
 					frm.reload_doc();
 				});
 			},
-			__("Actions")
+			__("Actions"),
 		);
 
 		frm.add_custom_button(
@@ -32,14 +32,14 @@ frappe.ui.form.on("Postman Setting", {
 					callback: function (r) {
 						if (r.message) {
 							frappe.msgprint(
-								r.message.message || "Whitelisted methods scanned successfully!"
+								r.message.message || "Whitelisted methods scanned successfully!",
 							);
 							frm.reload_doc();
 						}
 					},
 				});
 			},
-			__("Actions")
+			__("Actions"),
 		);
 
 		frm.add_custom_button(
@@ -54,8 +54,8 @@ frappe.ui.form.on("Postman Setting", {
 								<h4>System Status</h4>
 								<p><strong>Custom DocTypes:</strong> ${status.total_custom_doctypes}</p>
 								<p><strong>API Generators:</strong> ${status.total_api_generators} (${
-								status.active_api_generators
-							} active)</p>
+									status.active_api_generators
+								} active)</p>
 								<p><strong>Whitelisted Methods:</strong> ${status.total_whitelisted_methods}</p>
 								<p><strong>Postman Configured:</strong> ${status.postman_configured ? "Yes" : "No"}</p>
 								<p><strong>Auto Sync:</strong> ${status.auto_sync_enabled ? "Enabled" : "Disabled"}</p>
@@ -70,7 +70,7 @@ frappe.ui.form.on("Postman Setting", {
 					},
 				});
 			},
-			__("Actions")
+			__("Actions"),
 		);
 	},
 
